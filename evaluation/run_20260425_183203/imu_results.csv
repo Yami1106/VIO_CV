@@ -1,0 +1,3 @@
+scene,samples,trans_rmse,ate_rmse,ate_max,ate_mean
+scene_001_circle,999,0.000928,4.657361,7.680448,3.670277
+OVERALL,,,4.657361,,
