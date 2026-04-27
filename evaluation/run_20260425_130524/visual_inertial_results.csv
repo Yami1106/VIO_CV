@@ -1,0 +1,4 @@
+scene,samples,trans_rmse,ate_rmse,ate_max,ate_mean
+scene_009_sid,999,0.009792,2.181820,3.064579,2.092629
+scene_010_picasso,999,0.009197,2.113307,3.333872,1.980003
+OVERALL,,,2.147563,,
