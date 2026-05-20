@@ -1,160 +1,67 @@
-# S-MSCKF & Learned Stereo Visual-Inertial Odometry
+<div align="center">
 
-## Phase 1: S-MSCKF
-Python implementation of S-MSCKF for visual-inertial odometry, evaluated on the EuRoC MAV dataset.
+# Visual-Inertial Odometry — Classical & Deep Learning
 
-### Requirements
-- Python 3.6+
-- numpy
-- scipy
-- opencv-python (`cv2`)
-- pandas
-- matplotlib
-- ffmpeg (for video generation)
-- [pangolin](https://github.com/uoip/pangolin) (optional, for real-time 3D trajectory visualization)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org)
 
-Install Python dependencies:
-```bash
-pip install numpy scipy opencv-python pandas matplotlib
-```
+*Two complete approaches to VIO: a classical Kalman filter achieving 0.12 m RMSE, and a deep learned fused network reaching 1.18 m ATE after optimisation.*
 
-### Running the VIO Pipeline
-
-#### With visualization (requires pangolin + PyOpenGL)
-```bash
-python vio.py --view --path /path/to/MH_01_easy
-```
-
-#### Without visualization
-```bash
-python vio.py --path /path/to/MH_01_easy
-```
-
-#### Saving the log for evaluation
-Pipe the terminal output to a log file while still viewing it on screen:
-```bash
-python vio.py --view --path /path/to/MH_01_easy 2>&1 | tee phase1_run.log
-```
-
-### Evaluating Results
-Once you have a log file from the VIO run, use `phase1_outputs.py` to compute metrics and generate plots:
-```bash
-python phase1_outputs.py --log phase1_run.log --dataset /path/to/MH_01_easy --outdir phase1_outputs
-```
-
-#### Arguments
-| Argument    | Description                              | Default           |
-|-------------|------------------------------------------|-------------------|
-| `--log`     | Path to the saved VIO log file           |                   |
-| `--dataset` | Path to the EuRoC MH_01_easy directory   |                   |
-| `--outdir`  | Directory to save evaluation outputs     | `phase1_outputs`  |
-
-#### Outputs
-| File                             | Description                                              |
-|----------------------------------|----------------------------------------------------------|
-| `estimate_raw_tum.txt`           | Raw estimated trajectory in TUM format                   |
-| `groundtruth_matched_tum.txt`    | Time-matched ground truth in TUM format                  |
-| `estimate_aligned_tum.txt`       | SE(3)-aligned estimated trajectory in TUM format         |
-| `phase1_trajectory_overlay.png`  | XY and XZ trajectory comparison plot (estimate vs GT)    |
-| `Output.mp4`                     | Animated trajectory visualization video                  |
-| `phase1_metrics.txt`             | Computed error metrics                                   |
-
-#### Metrics
-The script computes and prints the following metrics after SE(3) Umeyama alignment:
-- **RMSE ATE** — Root Mean Square Error of Absolute Trajectory Error
-- **MAE** — Mean Absolute Error
-- **Median ATE** — Median Absolute Trajectory Error
-- **Max ATE** — Maximum Absolute Trajectory Error
-- **Final Drift** — Euclidean distance between final estimated and ground truth positions
+</div>
 
 ---
 
-## Phase 2: Learned Stereo Visual-Inertial Odometry
+## Overview
 
-A deep learning approach to VIO using stereo image pairs rendered from Blender scenes. A multi-scale CNN extracts visual features from 4-channel stereo inputs (left_t, right_t, left_t+1, right_t+1), a bidirectional LSTM with attention encodes IMU data, and gated fusion combines both modalities. Pose graph optimization corrects accumulated drift as a post-processing step.
+Visual-Inertial Odometry estimates a robot's trajectory by fusing camera images with IMU measurements. This project implements the problem twice — once with a classical probabilistic filter, and once with deep neural networks — and compares both on real and synthetic data.
 
-### Requirements
-- Python 3.10+
-- PyTorch (with CUDA)
-- Blender 4.x+
-- scipy, matplotlib, numpy
+---
 
-```bash
-pip install torch torchvision scipy matplotlib numpy
-```
+## Phase 1 — Classical S-MSCKF
 
-### Step 1: Generate Trajectories
-```bash
-cd Phase2/data_generation_stereo
-python generate_all_scenes_stereo.py
-```
-Generates 10 camera trajectories (10,000 poses each at 100Hz) across circle, oval, diamond, figure8, star, clover, mouse, halfmoon, sid, and picasso shapes.
+**Stereo Multi-State Constraint Kalman Filter** on the EuRoC MAV dataset (`MH_01_easy`).
 
-### Step 2: Render Stereo Images in Blender
+| Component | Detail |
+|---|---|
+| IMU propagation | 3rd-order matrix exponential + RK4 nominal integration |
+| Feature tracking | Sliding window of camera poses with multi-view constraints |
+| Initialisation | Gravity + bias from first 200 IMU samples |
+| Covariance update | Joseph form for numerical stability |
+| **Result** | **0.1201 m RMSE ATE** after SE(3) alignment with Vicon ground truth |
 
-Renders left and right camera images for each pose using Cycles with GPU. Baseline of 0.25m at 6m camera height gives ~13px disparity at 320×320.
+---
 
-data.blend (scenes 1–5):
-```bash
-blender -b /path/to/data.blend -P render_stereo.py -- --scene_name scene_001_circle --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/data.blend -P render_stereo.py -- --scene_name scene_002_oval --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/data.blend -P render_stereo.py -- --scene_name scene_003_diamond --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/data.blend -P render_stereo.py -- --scene_name scene_004_figure8 --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/data.blend -P render_stereo.py -- --scene_name scene_005_star --stereo --baseline 0.25 --image_stride 10
-```
+## Phase 2 — Deep Learning VIO
 
-texture2.blend (scenes 6–10):
-```bash
-blender -b /path/to/texture2.blend -P render_stereo.py -- --scene_name scene_006_clover --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/texture2.blend -P render_stereo.py -- --scene_name scene_007_mouse --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/texture2.blend -P render_stereo.py -- --scene_name scene_008_halfmoon --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/texture2.blend -P render_stereo.py -- --scene_name scene_009_sid --stereo --baseline 0.25 --image_stride 10
-blender -b /path/to/texture2.blend -P render_stereo.py -- --scene_name scene_010_picasso --stereo --baseline 0.25 --image_stride 10
-```
+Custom **synthetic dataset**: 20 scenes, 13 trajectory shapes, rendered in Blender at 100 Hz.
 
-### Step 3: Process Data
-```bash
-python process_all_scenes_stereo.py
-```
-Computes IMU measurements from poses and builds training sample pairs for all scenes.
+Three networks trained in PyTorch:
 
-### Step 4: Precompute Gyro Rotations
-```bash
-python precompute_rotation_stereo.py
-```
-Integrates gyroscope readings into relative quaternions and appends them to each scene's samples.
+| Network | Architecture | ATE |
+|---|---|---|
+| Vision-only | Multi-scale 3-stream CNN encoder | 4.71 m |
+| IMU-only | Bidirectional LSTM + temporal attention | 2.73 m |
+| Visual-Inertial (fused) | Learned sigmoid gate: `g·fᵥ + (1-g)·fᵢ` | 1.94 m |
+| VI + global optimisation | Loop closure + smoothness | **1.18 m** |
 
-### Step 5: Split Dataset
-```bash
-python split_dataset_stereo.py
-```
+Loss: weighted MSE (altitude weight 4.0) + quaternion geodesic loss + 5-step rollout penalty.
 
-| Split | Scenes | Environment |
-|-------|--------|-------------|
-| Train (7) | circle, oval, diamond, figure8, clover, mouse, halfmoon | data.blend + texture2.blend |
-| Val (1) | star | data.blend |
-| Test (2) | sid, picasso | texture2.blend |
+---
 
-### Step 6: Train
-```bash
-cd Phase2/training_stereo
+## Key findings
 
-# Vision-only: predicts full 7D pose (3D translation + 4D quaternion)
-python train_stereo.py --mode stereo_vision
+- Precomputed gyro rotation is a strong prior — removing it degraded ATE from 1.94 m → 3.69 m
+- Global optimisation (loop closure + path smoothness) gave a 39% trajectory improvement
+- Gated sensor fusion consistently outperformed either modality alone
 
-# Visual-inertial: predicts 3D translation (rotation from gyro integration)
-python train_stereo.py --mode stereo_visual_inertial
-```
-Models saved as `stereo_vision_best.pth` and `stereo_visual_inertial_best.pth`.
+---
 
-### Step 7: Evaluate (Dead Reckoning)
-```bash
-python test_stereo.py --all --splits train val test
-```
-Produces per-scene trajectory plots and ATE metrics using raw dead-reckoned predictions.
+## Tech stack
 
-### Step 8: Evaluate (With Pose Graph Optimization)
-```bash
-python test_stereo_optimized.py --all --splits test
-```
-Applies post-processing optimization with relative, loop closure, and smoothness constraints. Outputs comparison plots showing dead-reckoned vs optimized vs ground truth trajectories.
+`Python` · `PyTorch` · `NumPy` · `Blender` · `EuRoC Dataset`
+
+---
+
+<div align="center">
+Part of the WPI Computer Vision course · <a href="https://github.com/Yami1106">Ashish Sukumar</a>
+</div>
